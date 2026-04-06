@@ -71,17 +71,23 @@ async def balance_handler(message: Message, user_data: dict):
 @require_registration
 async def player_history_handler(message: Message, user_data: dict):
     vk_id = message.from_id
-    history = await database.get_user_history(vk_id, limit=config.HISTORY_LIMIT)
-
-    if not history:
-        await message.answer("📭 У вас пока нет ни одной транзакции.")
-        return
-
-    blocks = [f"📜 Последние {len(history)} операций:"]
-    for i, tx in enumerate(history, 1):
-        blocks.append(f"--- Транзакция #{i} ---\n" + utils.format_transaction(tx, viewer_id=vk_id))
-
-    await message.answer("\n\n".join(blocks))
+    try:
+        
+        if not history:
+            await message.answer("📭 У вас пока нет ни одной транзакции.")
+            return
+            
+        blocks = [f"📜 Последние {len(history)} операций:"]
+        for i, tx in enumerate(history, 1):
+            blocks.append(f"--- Транзакция #{i} ---\n" + utils.format_transaction(tx, viewer_id=vk_id))
+            
+        await message.answer("\n\n".join(blocks))
+    except Exception as e:
+        if "requires an index" in str(e):
+            await message.answer("⚠️ Ошибка работы с базой: Необходим индекс Firestore.\n\n"
+                                 "Пожалуйста, проверьте логи на Render.com и перейдите по ссылке для создания индекса.")
+        else:
+            await message.answer(f"❌ Не удалось получить историю: {str(e)}")
 
 # ─── /помощь ────────────────────────────────────────────────────────────────
 

@@ -14,13 +14,15 @@ logging.basicConfig(
 logger = logging.getLogger("vkbot")
 
 # ─── VK ────────────────────────────────────────────────────────────────────────
-VK_TOKEN: str = os.getenv("VK_TOKEN", "")
-ADMIN_VK_ID: int = int(os.getenv("ADMIN_VK_ID", "0"))
+VK_TOKEN: str = os.getenv("VK_TOKEN", "").strip()
+
+_admin_id_raw = os.getenv("ADMIN_VK_ID", "0").strip()
+ADMIN_VK_ID: int = int(_admin_id_raw) if _admin_id_raw.isdigit() else 0
 
 if not VK_TOKEN:
-    raise ValueError("VK_TOKEN не задан в .env")
+    raise ValueError("VK_TOKEN не задан! Проверьте файл .env или Environment Variables в панели Render.com.")
 if not ADMIN_VK_ID:
-    raise ValueError("ADMIN_VK_ID не задан в .env")
+    raise ValueError("ADMIN_VK_ID не задан или равен 0! Проверьте файл .env или Environment Variables в панели Render.com.")
 
 # ─── Firebase ──────────────────────────────────────────────────────────────────
 _firebase_raw = os.getenv("FIREBASE_CREDENTIALS", "")

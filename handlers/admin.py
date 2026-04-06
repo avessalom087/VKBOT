@@ -207,17 +207,24 @@ async def admin_history_handler(message: Message, mention: str, admin_data: dict
         await message.answer("❌ Неверный формат упоминания пользователя.")
         return
 
-    history = await database.get_user_history(target_id, limit=config.HISTORY_LIMIT)
-
-    if not history:
-        await message.answer("📭 У этого пользователя пока нет транзакций.")
-        return
-
-    blocks = [f"📜 Последние {len(history)} операций пользователя:"]
-    for i, tx in enumerate(history, 1):
-        blocks.append(f"--- Транзакция #{i} ---\n" + utils.format_transaction(tx, viewer_id=message.from_id))
-
-    await message.answer("\n\n".join(blocks))
+    try:
+        history = await database.get_user_history(target_id, limit=config.HISTORY_LIMIT)
+        
+        if not history:
+            await message.answer("📭 У этого пользователя пока нет транзакций.")
+            return
+            
+        blocks = [f"📜 Последние {len(history)} операций пользователя:"]
+        for i, tx in enumerate(history, 1):
+            blocks.append(f"--- Транзакция #{i} ---\n" + utils.format_transaction(tx, viewer_id=message.from_id))
+            
+        await message.answer("\n\n".join(blocks))
+    except Exception as e:
+        if "requires an index" in str(e):
+            await message.answer("⚠️ Ошибка работы с базой: Необходим индекс Firestore.\n\n"
+                                 "Пожалуйста, проверьте логи на Render.com и перейдите по ссылке для создания индекса.")
+        else:
+            await message.answer(f"❌ Не удалось получить историю: {str(e)}")
 
 # ─── /изменитьперса ───────────────────────────────────────────────────────────
 
