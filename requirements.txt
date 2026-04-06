@@ -1,0 +1,4 @@
+vkbottle==4.8.1
+firebase-admin==7.3.0
+aiohttp==3.13.5
+python-dotenv==1.2.2
