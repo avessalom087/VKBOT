@@ -8,13 +8,14 @@ import config
 # Import blueprints
 from handlers.player import bp as player_bp
 from handlers.admin import bp as admin_bp
+from handlers.dice import bp as dice_bp
 
 logger = logging.getLogger("vkbot.main")
 
 bot = Bot(token=config.VK_TOKEN)
 
 # Register blueprints
-for bp in [player_bp, admin_bp]:
+for bp in [player_bp, admin_bp, dice_bp]:
     bp.load(bot)
 
 # Health-check HTTP server for keep-alive (Render.com + UptimeRobot)

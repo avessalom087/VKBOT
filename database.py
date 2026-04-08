@@ -101,7 +101,7 @@ async def change_balance(user_id: int, admin_id: int, amount: int, reason: str):
 
 def _get_all_users_sync():
     users_ref = db.collection('users')
-    docs = users_ref.order_by("balance", direction=firestore.Query.DESCENDING).get()
+    docs = users_ref.order_by("balance", direction=firestore.Query.DESCENDING).limit(config.BANK_TOP_LIMIT).get()
     return [doc.to_dict() for doc in docs]
 
 async def get_all_users():

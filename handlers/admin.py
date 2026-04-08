@@ -58,8 +58,6 @@ async def admin_check_balance_handler(message: Message, mention: str, admin_data
 #    /начислить @user 200, @user 300 причина    — каждому свою сумму
 #    /начислить @user 200, @user 300, @user 100 причина
 
-MENTION_RE = re.compile(r"\[id(\d+)\|[^\]]*\]")
-
 def parse_multi_deposit(raw: str):
     """
     Парсит строку аргументов команды /начислить.
@@ -68,63 +66,54 @@ def parse_multi_deposit(raw: str):
         reason: str
         error: str | None
     """
-    # Убираем начальный пробел
     raw = raw.strip()
-
-    # --- Формат А: "[@user] сумма, [@user] сумма, ... причина"  (каждому своя)
-    # --- Формат Б: "[@user], [@user], ... сумма причина"        (всем одна)
-    #
-    # Стратегия: найти все упоминания + числа по порядку, последний токен-строка = причина
-
-    # Разбиваем на «токены»: упоминание, число или остаток-строка
-    token_re = re.compile(r"\[id\d+\|[^\]]*\]|\d+|[а-яА-Яa-zA-Z][^\[,\d]*")
-    tokens = token_re.findall(raw)
-
-    # Собираем «segments» — пары (mention_id, amount_or_None)
-    mentions = []      # list of (user_id, amount_or_None)
-    numbers = []       # list of int — числа, найденные вне пар
-    text_parts = []    # строки — кандидаты на причину
-
-    i = 0
-    while i < len(tokens):
-        token = tokens[i].strip()
-        m = MENTION_RE.match(token)
-        if m:
-            uid = int(m.group(1))
-            # Следующий токен — число?
-            if i + 1 < len(tokens):
-                next_tok = tokens[i + 1].strip()
-                if re.fullmatch(r"\d+", next_tok):
-                    mentions.append((uid, int(next_tok)))
-                    i += 2
-                    continue
-            mentions.append((uid, None))
-        elif re.fullmatch(r"\d+", token):
-            numbers.append(int(token))
-        else:
-            text_parts.append(token.strip(" ,"))
-        i += 1
-
-    reason = " ".join(p for p in text_parts if p) or "Начисление"
-
+    mentions = []
+    numbers = []
+    
+    mention_re = re.compile(r"^(?:\[id(\d+)\|[^\]]*\]|(?:@|\*|vk\.com/)?id(\d+))", re.IGNORECASE)
+    number_re = re.compile(r"^\d+")
+    separator_re = re.compile(r"^[\s,]+")
+    
+    idx = 0
+    while idx < len(raw):
+        sep_match = separator_re.match(raw, idx)
+        if sep_match:
+            idx = sep_match.end()
+            if idx >= len(raw): break
+                
+        m_match = mention_re.match(raw, idx)
+        if m_match:
+            mentions.append(int(m_match.group(1) or m_match.group(2)))
+            idx = m_match.end()
+            continue
+            
+        n_match = number_re.match(raw, idx)
+        if n_match:
+            numbers.append(int(n_match.group(0)))
+            idx = n_match.end()
+            continue
+            
+        break
+        
+    reason = raw[idx:].strip() or "Начисление"
+    
     if not mentions:
         return None, None, "Не найдено ни одного упоминания игрока."
 
-    # Определяем: у каждого своя сумма или одна общая?
-    has_individual = all(amt is not None for _, amt in mentions)
-    has_global = any(amt is None for _, amt in mentions) and len(numbers) > 0
-
-    if has_individual:
-        pairs = [(uid, amt) for uid, amt in mentions]
-    elif has_global:
-        global_amount = numbers[0]
-        if global_amount < config.MIN_TRANSACTION or global_amount > config.MAX_TRANSACTION:
-            return None, None, f"Сумма должна быть от {config.MIN_TRANSACTION} до {config.MAX_TRANSACTION}."
-        pairs = [(uid, global_amount) for uid, _ in mentions]
+    pairs = []
+    if len(numbers) == 1 or (len(numbers) > 1 and len(mentions) != len(numbers)):
+        global_amt = numbers[0]
+        pairs = [(uid, global_amt) for uid in mentions]
+        
+        if len(numbers) > 1:
+            extra_nums = " ".join(str(n) for n in numbers[1:])
+            reason = f"{extra_nums} {reason}".strip()
+            
+    elif len(numbers) == len(mentions):
+        pairs = list(zip(mentions, numbers))
     else:
         return None, None, "Не удалось определить сумму. Укажите сумму после каждого упоминания или одну общую сумму."
 
-    # Валидация индивидуальных сумм
     for uid, amt in pairs:
         if amt < config.MIN_TRANSACTION or amt > config.MAX_TRANSACTION:
             return None, None, f"Сумма {amt} вне допустимого диапазона ({config.MIN_TRANSACTION}–{config.MAX_TRANSACTION})."

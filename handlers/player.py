@@ -72,7 +72,7 @@ async def balance_handler(message: Message, user_data: dict):
 async def player_history_handler(message: Message, user_data: dict):
     vk_id = message.from_id
     try:
-        
+        history = await database.get_user_history(vk_id)
         if not history:
             await message.answer("📭 У вас пока нет ни одной транзакции.")
             return
@@ -121,6 +121,8 @@ async def help_handler(message: Message):
             "• /снятьбанкира @игрок\n"
             "• /удалить @игрок — Удалить игрока\n"
         )
+        
+    text += "\n🎲 Доп. команды: /помощь дайсы\n"
 
     await message.answer(text)
 
