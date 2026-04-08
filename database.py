@@ -107,6 +107,14 @@ def _get_all_users_sync():
 async def get_all_users():
     return await asyncio.to_thread(_get_all_users_sync)
 
+def _get_all_users_unlimited_sync():
+    users_ref = db.collection('users')
+    docs = users_ref.order_by("balance", direction=firestore.Query.DESCENDING).get()
+    return [doc.to_dict() for doc in docs]
+
+async def get_all_users_unlimited():
+    return await asyncio.to_thread(_get_all_users_unlimited_sync)
+
 def _get_user_history_sync(user_id: int, limit: int):
     tx_ref = db.collection('transactions')
     query = tx_ref.where(filter=firestore.FieldFilter("user_id", "==", user_id)).order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit)

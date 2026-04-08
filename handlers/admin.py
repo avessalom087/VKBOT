@@ -1,4 +1,8 @@
 import re
+import os
+import csv
+import tempfile
+from vkbottle import DocMessagesUploader
 from vkbottle.bot import Blueprint, Message
 import functools
 import database
@@ -28,7 +32,35 @@ async def bank_handler(message: Message, admin_data: dict):
         await message.answer("В банке пока нет зарегистрированных игроков.")
         return
     table = utils.generate_bank_table(users)
-    await message.answer(f"```\n{table}\n```")
+    await message.answer(table)
+
+@bp.on.message(text=["/банк эксель", "/банк excel", "Банк эксель", "Банк excel", "/банк выгрузка"])
+@require_admin
+async def bank_excel_handler(message: Message, admin_data: dict):
+    users = await database.get_all_users_unlimited()
+    if not users:
+        await message.answer("В банке пока нет зарегистрированных игроков.")
+        return
+    
+    try:
+        # Пишем файл с BOM для корректного отображения кириллицы в русском Excel (разделитель - точка с запятой)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".csv", prefix="bank_", encoding='utf-8-sig', newline='') as tmp:
+            writer = csv.writer(tmp, delimiter=';')
+            writer.writerow(["VK ID", "Имя ВК", "Персонаж", "Статус", "Баланс (ft)"])
+            for u in users:
+                status_ru = "Администратор" if u.get("status") == "admin" else "Игрок"
+                writer.writerow([str(u.get('vk_id', '')), u.get('vk_name', ''), u.get('character_name', ''), status_ru, u.get('balance', 0)])
+            temp_path = tmp.name
+        
+        uploader = DocMessagesUploader(bp.api)
+        doc = await uploader.upload(title="База_Банка.csv", file_source=temp_path, peer_id=message.peer_id)
+        
+        await message.answer("✅ Вся база игроков успешно выгружена:", attachment=doc)
+    except Exception as e:
+        await message.answer(f"❌ Ошибка выгрузки: {e}")
+    finally:
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 # ─── /счёт @user (для Банкиров) ───────────────────────────────────────────
 

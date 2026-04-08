@@ -70,27 +70,41 @@ async def roll_handler(message: Message, args: str = None):
     
     crit_msg = ""
     if roll_result == 1:
-        crit_msg = "\n💀 **КРИТИЧЕСКИЙ ПРОВАЛ!** 💀"
+        crit_msg = "\n💀 КРИТИЧЕСКИЙ ПРОВАЛ! 💀"
     elif roll_result == dice_type:
-        crit_msg = "\n✨ **КРИТИЧЕСКИЙ УСПЕХ!** ✨"
+        crit_msg = "\n✨ КРИТИЧЕСКИЙ УСПЕХ! ✨"
         
-    vk_mention = f"@id{user_id}"
+    # Пытаемся получить имя пользователя или его кастомный никнейм для красивого упоминания
+    try:
+        users_info = await bp.api.users.get(user_ids=[user_id], fields=["screen_name"])
+        if users_info:
+            user = users_info[0]
+            # Если есть красивый никнейм (@aves_087), используем его, иначе просто Имя
+            if user.screen_name and not user.screen_name.startswith("id"):
+                name_display = f"@{user.screen_name}"
+            else:
+                name_display = user.first_name
+            vk_mention = f"[id{user_id}|{name_display}]"
+        else:
+            vk_mention = f"@id{user_id}"
+    except Exception:
+        vk_mention = f"@id{user_id}"
     
     mod_text = ""
     dice_display = f"d{dice_type}"
     
     if modifier > 0:
-        mod_text = f"\n➕ Модификатор: **+{modifier}**"
+        mod_text = f"\n➕ Модификатор: +{modifier}"
         dice_display += f"+{modifier}"
     elif modifier < 0:
-        mod_text = f"\n➖ Модификатор: **{modifier}**"
+        mod_text = f"\n➖ Модификатор: {modifier}"
         dice_display += f"{modifier}"
 
-    label_text = f"\n📝 *Подпись: {label}*" if label else ""
+    label_text = f"\n📝 Подпись: {label}" if label else ""
 
-    text = (f"🎲 {vk_mention}, результат броска **{dice_display}**:\n"
-            f"🎰 Выпало: **{roll_result}**{mod_text}\n"
-            f"🏆 Итого: **{total}**{crit_msg}{label_text}")
+    text = (f"🎲 {vk_mention}, результат броска {dice_display}:\n"
+            f"🎰 Выпало: {roll_result}{mod_text}\n"
+            f"🏆 Итого: {total}{crit_msg}{label_text}")
 
     await message.answer(text, disable_mentions=False)
 
