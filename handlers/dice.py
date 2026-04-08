@@ -117,17 +117,14 @@ async def roll_handler(message: Message, args: str = None):
     full_dice_display = f"{dice_display}{mod_str}"
     label_text = f" ({label})" if label else ""
 
-    rolls_str = str(rolls[0]) if count == 1 else f"[{', '.join(map(str, rolls))}]"
+    vypalo_str = str(rolls[0]) if count == 1 else f"[{', '.join(map(str, rolls))}]"
+            
+    text_lines = [f"🎲 {vk_mention}, результат броска {full_dice_display}{label_text}:"]
+    text_lines.append(f"🎰 Выпало: {vypalo_str}")
     
-    if modifier == 0:
-        if count == 1:
-            itogo_str = f"{rolls_str}"
-        else:
-            itogo_str = f"{rolls_str} = {total}"
-    else:
-        sign = "+" if modifier > 0 else "-"
-        abs_mod = abs(modifier)
-        itogo_str = f"[{rolls_str} {sign} {abs_mod}] = {total}"
+    if modifier != 0:
+        mod_icon = "➕" if modifier > 0 else "➖"
+        text_lines.append(f"{mod_icon} Модификатор: {mod_str}")
         
     crit_msg = ""
     if count == 1:
@@ -136,8 +133,9 @@ async def roll_handler(message: Message, args: str = None):
         elif rolls[0] == dice_type:
             crit_msg = " ✨ (КРИТИЧЕСКИЙ УСПЕХ!)"
 
-    text = (f"🎲 {vk_mention}, результат броска {full_dice_display}{label_text}:\n"
-            f"Итого: {itogo_str}{crit_msg}")
+    text_lines.append(f"🏆 Итого: {total}{crit_msg}")
+    
+    text = "\n".join(text_lines)
 
     await message.answer(text, disable_mentions=False)
 
