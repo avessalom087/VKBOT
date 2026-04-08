@@ -66,6 +66,7 @@ DELETE_CONFIRM_TIMEOUT = 60  # секунд
 ALLOWED_DICE = (4, 6, 8, 10, 12, 20, 100)
 DICE_COOLDOWN = 3
 MAX_DICE_LABEL_LEN = 50
+MAX_DICE_COUNT = 10
 
 # ─── Timezone ──────────────────────────────────────────────────────────────────
 TIMEZONE_OFFSET = 3  # UTC+3 (Москва)

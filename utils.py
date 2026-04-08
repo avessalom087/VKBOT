@@ -25,28 +25,26 @@ def get_currency_form(amount: int) -> str:
     return config.CURRENCY_FORMS[2]
 
 def format_user_row(index: int, user: dict) -> str:
-    status_emoji = "👑" if user.get("status") == "admin" else "👤"
     vk_id = user.get("vk_id")
     name = user.get("vk_name", "Неизвестно")
     char_name = user.get("character_name", "Неизвестно")
     balance = format_balance(user.get("balance", 0))
     
-    return f"{index}. {status_emoji} @id{vk_id} ({name}) | 🎭 {char_name}\n   💰 Счёт: {balance}"
+    return f"{index}. [id{vk_id}|{name}] ({char_name}) — {balance}"
 
 def generate_bank_table(users: list) -> str:
     total_balance = sum(user.get("balance", 0) for user in users)
     
     lines = [
-        f"🏦 ТОП-ДВАДЦАТКА: {config.BANK_NAME.upper()}",
-        f"👥 Всего игроков: {len(users)}",
-        f"🌍 В обороте: {format_balance(total_balance)}",
-        "➖➖➖➖➖➖➖➖➖➖"
+        f"🏛 {config.BANK_NAME.upper()} | ТОП-20",
+        f"Участников: {len(users)} | Бюджет: {format_balance(total_balance)}",
+        "------------------------------------"
     ]
     
     for i, user in enumerate(users[:config.BANK_TOP_LIMIT], 1):
         lines.append(format_user_row(i, user))
         
-    return "\n\n".join(lines)
+    return "\n".join(lines)
 
 def format_transaction(tx: dict, viewer_id: int) -> str:
     amount = tx.get("amount", 0)
@@ -67,15 +65,13 @@ def format_transaction(tx: dict, viewer_id: int) -> str:
     balance_after = format_balance(tx.get("balance_after", 0))
     admin_id = tx.get("admin_id")
     
-    prefix = "🟢" if amount >= 0 else "🔴"
-    
-    lines = [
-        f"{prefix} {sign}{format_balance(abs_amount)} | 💳 Остаток: {balance_after}",
-        f"📝 Причина: {reason}",
-        f"🕒 {time_str}"
-    ]
+    # Formatting without emojis
+    line1 = f"{sign} {format_balance(abs_amount)} | Остаток: {balance_after}"
+    line2 = f"Причина: {reason}"
     
     if admin_id and admin_id != viewer_id:
-        lines.append(f"👨‍⚖️ Кардинал (Адм): @id{admin_id}")
+        line3 = f"{time_str} (Адм: @id{admin_id})"
+    else:
+        line3 = f"{time_str}"
         
-    return "\n".join(lines)
+    return f"{line1}\n{line2}\n{line3}"
