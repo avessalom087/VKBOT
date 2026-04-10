@@ -8,6 +8,7 @@ import functools
 import database
 import config
 import utils
+import flavor
 
 bp = Blueprint("AdminCommands")
 
@@ -181,7 +182,8 @@ async def deposit_handler(message: Message, args: str, admin_data: dict):
             results.append(f"❌ ID {target_id}: непредвиденная ошибка — {e}")
 
     summary = "\n".join(results)
-    await message.answer(f"📋 Результаты начисления (причина: {reason}):\n\n{summary}")
+    flavor_text = f"\n\n_{flavor.get_deposit_flavor()}_"
+    await message.answer(f"📋 Результаты начисления (причина: {reason}):\n\n{summary}{flavor_text}")
 
 # ─── /снять @user сумма причина (только для Банкира) ────────────────────────
 
@@ -211,7 +213,8 @@ async def admin_withdraw_handler(message: Message, mention: str, amount: int, re
         await message.answer(
             f"🔻 Снято {utils.format_balance(amount)} у персонажа {char}.\n"
             f"💰 Остаток: {utils.format_balance(new_balance)}\n"
-            f"📝 Причина: {reason}"
+            f"📝 Причина: {reason}\n\n"
+            f"_{flavor.get_withdraw_flavor()}_"
         )
     except ValueError as e:
         await message.answer(f"❌ Операция отклонена: {e}")

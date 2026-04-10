@@ -4,6 +4,7 @@ from vkbottle import BaseStateGroup
 import database
 import config
 import utils
+import flavor
 
 bp = Blueprint("PlayerCommands")
 
@@ -148,7 +149,8 @@ async def player_withdraw_handler(message: Message, amount: int, reason: str, us
         response = (
             f"🔻 Успешно снято {utils.format_balance(amount)}.\n"
             f"💰 Остаток на счёте: {utils.format_balance(new_balance)}\n"
-            f"📝 Причина: {reason}"
+            f"📝 Причина: {reason}\n\n"
+            f"_{flavor.get_withdraw_flavor()}_"
         )
         await message.answer(response)
     except ValueError as e:

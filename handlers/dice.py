@@ -3,6 +3,7 @@ import random
 import time
 from vkbottle.bot import Blueprint, Message
 import config
+import flavor
 
 bp = Blueprint("DiceCommands")
 
@@ -127,13 +128,16 @@ async def roll_handler(message: Message, args: str = None):
         text_lines.append(f"{mod_icon} Модификатор: {mod_str}")
         
     crit_msg = ""
+    crit_flavor = ""
     if count == 1:
         if rolls[0] == 1:
             crit_msg = " 💀 (КРИТИЧЕСКИЙ ПРОВАЛ!)"
+            crit_flavor = f"\n\n_{flavor.get_crit_fail_flavor()}_"
         elif rolls[0] == dice_type:
             crit_msg = " ✨ (КРИТИЧЕСКИЙ УСПЕХ!)"
+            crit_flavor = f"\n\n_{flavor.get_crit_success_flavor()}_"
 
-    text_lines.append(f"🏆 Итого: {total}{crit_msg}")
+    text_lines.append(f"🏆 Итого: {total}{crit_msg}{crit_flavor}")
     
     text = "\n".join(text_lines)
 
