@@ -84,17 +84,19 @@ async def admin_check_balance_handler(message: Message, mention: str, admin_data
     await message.answer(f"👤 Персонаж: {char_name}\n💰 Счёт: {utils.format_balance(balance)}")
 
 # ─── /начислить — с поддержкой нескольких игроков ───────────────────────────
-#
-#  Форматы:
-#    /начислить @user 500 причина               — одному
-#    /начислить @user, @user, @user 500 причина — нескольким одну сумму
-#    /начислить @user 200, @user 300 причина    — каждому свою сумму
-#    /начислить @user 200, @user 300, @user 100 причина
+# Форматы:
+#   /начислить @user 500 причина
+#   /начислить @user, @user 500 причина
+#   /начислить @user 100, @user 200 причина
+
+# Компилируем один раз на старте
+_MENTION_RE = re.compile(r"\[(?:id|club|public)(\d+)\|[^\]]*\]|@([a-zA-Z0-9._]+)", re.IGNORECASE)
+_NUMBER_RE  = re.compile(r"(\d+)(?![a-zA-Z_])")
 
 def parse_multi_deposit(raw: str):
     """
     Парсит строку аргументов команды /начислить.
-    Теперь намного гибче: находит все упоминания и числа.
+    Поддерживает алиасы (@aves_087), [id123|Имя], @id123.
     Возвращает:
         list of (mention_str: str, amount: int)
         reason: str
@@ -104,69 +106,55 @@ def parse_multi_deposit(raw: str):
     if not raw:
         return None, None, "Пустой запрос."
 
-    # Регулярка для упоминаний: [id123|Имя], @id123, @alias, id123, alias
-    # Группа 1: ID из [id123|...]
-    # Группа 2: Алиас или ID из @alias или просто id123
-    mention_pattern = r"\[(?:id|club|public)(\d+)\|[^\]]*\]|(?:@|\*|vk\.com/)?([a-zA-Z0-9._]+)"
-    mention_re = re.compile(mention_pattern, re.IGNORECASE)
-    number_re = re.compile(r"^\d+")
-    separator_re = re.compile(r"^[\s,]+")
-
-    idx = 0
     mentions = []
-    numbers = []
-    last_token_end = 0
+    numbers  = []
+    last_end = 0
 
-    # Сначала соберем все упоминания и числа в начале строки
-    while idx < len(raw):
-        # Пропускаем разделители
-        sep_match = separator_re.match(raw, idx)
-        if sep_match:
-            idx = sep_match.end()
-            if idx >= len(raw): break
+    pos = 0
+    while pos < len(raw):
+        # Пропускаем пробелы и запятые
+        while pos < len(raw) and raw[pos] in " \t,":
+            pos += 1
+        if pos >= len(raw):
+            break
 
-        # Пробуем найти число (СНАЧАЛА ЧИСЛА, чтобы сумма не считалась алиасом)
-        n_match = number_re.match(raw, idx)
-        if n_match:
-            numbers.append(int(n_match.group(0)))
-            idx = n_match.end()
-            last_token_end = idx
-            continue
-
-        # Пробуем найти упоминание
-        m_match = mention_re.match(raw, idx)
+        # Сначала ищем упоминание (@alias или [id...|...])
+        m_match = _MENTION_RE.match(raw, pos)
         if m_match:
-            # Сохраняем "сырое" упоминание для дальнейшего резолва
-            raw_mention = m_match.group(1) or m_match.group(2)
-            mentions.append(raw_mention)
-            idx = m_match.end()
-            last_token_end = idx
+            uid = m_match.group(1) or m_match.group(2)
+            mentions.append(uid)
+            last_end = m_match.end()
+            pos = last_end
             continue
 
-        # Если не нашли ни числа, ни упоминания — начался текст причины
+        # Затем ищем число
+        n_match = _NUMBER_RE.match(raw, pos)
+        if n_match and n_match.start() == pos:
+            numbers.append(int(n_match.group(1)))
+            last_end = n_match.end()
+            pos = last_end
+            continue
+
+        # Ни то ни другое — начало текста причины
         break
 
-    reason = raw[last_token_end:].strip() or "Начисление"
-    
+    reason = raw[last_end:].strip().lstrip(",").strip() or "Начисление"
+
     if not mentions:
         return None, None, "Не найдено ни одного упоминания игрока."
 
     if not numbers:
         return None, None, "Не указана сумма начисления."
 
-    pairs = []
-    # Логика распределения сумм
     if len(numbers) == 1:
-        # Одна сумма на всех
+        # одна сумма на всех
         pairs = [(m, numbers[0]) for m in mentions]
     elif len(numbers) == len(mentions):
-        # Каждому своя сумма
+        # каждому своя сумма
         pairs = list(zip(mentions, numbers))
     else:
-        # Непонятно, как распределять (например, 2 суммы на 3 человек)
         return None, None, "Не удалось сопоставить суммы игрокам. Укажите либо одну общую сумму, либо по сумме после каждого игрока."
 
-    # Минимальная валидация (макс/мин проверим позже при начислении)
     return pairs, reason, None
 
 

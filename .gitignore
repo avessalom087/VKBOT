@@ -30,3 +30,7 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Dev-only files
+test_*.py
+scratch_*.py
