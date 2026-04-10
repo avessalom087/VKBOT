@@ -1,5 +1,6 @@
 from vkbottle.bot import Blueprint, Message
 import functools
+import re
 from vkbottle import BaseStateGroup
 import database
 import config
@@ -135,6 +136,11 @@ async def help_handler(message: Message):
 @require_registration
 async def player_withdraw_handler(message: Message, amount: int, reason: str, user_data: dict):
     """Игроки могут снимать только со своего счёта."""
+    # Если в сообщении есть упоминание ([id...|...] или @alias), пропускаем этот хендлер
+    # Это нужно, чтобы административные команды /снять @user не перехватывались здесь
+    if re.search(r"\[(?:id|club|public)\d+\|[^\]]*\]|@\w+", message.text or ""):
+        return
+    
     # Валидация суммы
     if amount < config.MIN_TRANSACTION or amount > config.MAX_TRANSACTION:
         await message.answer(f"❌ Сумма должна быть от {config.MIN_TRANSACTION} до {config.MAX_TRANSACTION}.")

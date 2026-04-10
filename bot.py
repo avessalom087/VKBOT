@@ -15,7 +15,7 @@ logger = logging.getLogger("vkbot.main")
 bot = Bot(token=config.VK_TOKEN)
 
 # Register blueprints
-for bp in [player_bp, admin_bp, dice_bp]:
+for bp in [admin_bp, player_bp, dice_bp]:
     bp.load(bot)
 
 # Health-check HTTP server for keep-alive (Render.com + UptimeRobot)
