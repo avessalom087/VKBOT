@@ -132,10 +132,10 @@ async def roll_handler(message: Message, args: str = None):
     if count == 1:
         if rolls[0] == 1:
             crit_msg = " 💀 (КРИТИЧЕСКИЙ ПРОВАЛ!)"
-            crit_flavor = f"\n\n_{flavor.get_crit_fail_flavor()}_"
+            crit_flavor = f"\n\n💀 «{flavor.get_crit_fail_flavor()}»"
         elif rolls[0] == dice_type:
             crit_msg = " ✨ (КРИТИЧЕСКИЙ УСПЕХ!)"
-            crit_flavor = f"\n\n_{flavor.get_crit_success_flavor()}_"
+            crit_flavor = f"\n\n🎲 «{flavor.get_crit_success_flavor()}»"
 
     text_lines.append(f"🏆 Итого: {total}{crit_msg}{crit_flavor}")
     

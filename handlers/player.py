@@ -150,7 +150,7 @@ async def player_withdraw_handler(message: Message, amount: int, reason: str, us
             f"🔻 Успешно снято {utils.format_balance(amount)}.\n"
             f"💰 Остаток на счёте: {utils.format_balance(new_balance)}\n"
             f"📝 Причина: {reason}\n\n"
-            f"_{flavor.get_withdraw_flavor()}_"
+            f"💸 «{flavor.get_withdraw_flavor()}»"
         )
         await message.answer(response)
     except ValueError as e:

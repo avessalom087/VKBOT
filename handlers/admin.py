@@ -68,9 +68,9 @@ async def bank_excel_handler(message: Message, admin_data: dict):
 @bp.on.message(text=["/счёт <mention>", "/счет <mention>"])
 @require_admin
 async def admin_check_balance_handler(message: Message, mention: str, admin_data: dict):
-    target_id = utils.extract_user_id(mention)
+    target_id = await resolve_to_id(bp.api, mention)
     if not target_id:
-        await message.answer("❌ Неверный формат упоминания.")
+        await message.answer("❌ Не удалось распознать пользователя.")
         return
 
     target_user = await database.get_user(target_id)
@@ -94,64 +94,102 @@ async def admin_check_balance_handler(message: Message, mention: str, admin_data
 def parse_multi_deposit(raw: str):
     """
     Парсит строку аргументов команды /начислить.
+    Теперь намного гибче: находит все упоминания и числа.
     Возвращает:
-        list of (user_id: int, amount: int)  — пары «кому» + «сколько»
+        list of (mention_str: str, amount: int)
         reason: str
         error: str | None
     """
     raw = raw.strip()
-    mentions = []
-    numbers = []
-    
-    mention_re = re.compile(r"^(?:\[id(\d+)\|[^\]]*\]|(?:@|\*|vk\.com/)?id(\d+))", re.IGNORECASE)
+    if not raw:
+        return None, None, "Пустой запрос."
+
+    # Регулярка для упоминаний: [id123|Имя], @id123, @alias, id123, alias
+    # Группа 1: ID из [id123|...]
+    # Группа 2: Алиас или ID из @alias или просто id123
+    mention_pattern = r"\[(?:id|club|public)(\d+)\|[^\]]*\]|(?:@|\*|vk\.com/)?([a-zA-Z0-9._]+)"
+    mention_re = re.compile(mention_pattern, re.IGNORECASE)
     number_re = re.compile(r"^\d+")
     separator_re = re.compile(r"^[\s,]+")
-    
+
     idx = 0
+    mentions = []
+    numbers = []
+    last_token_end = 0
+
+    # Сначала соберем все упоминания и числа в начале строки
     while idx < len(raw):
+        # Пропускаем разделители
         sep_match = separator_re.match(raw, idx)
         if sep_match:
             idx = sep_match.end()
             if idx >= len(raw): break
-                
+
+        # Пробуем найти упоминание
         m_match = mention_re.match(raw, idx)
         if m_match:
-            mentions.append(int(m_match.group(1) or m_match.group(2)))
+            # Сохраняем "сырое" упоминание для дальнейшего резолва
+            raw_mention = m_match.group(1) or m_match.group(2)
+            mentions.append(raw_mention)
             idx = m_match.end()
+            last_token_end = idx
             continue
-            
+
+        # Пробуем найти число
         n_match = number_re.match(raw, idx)
         if n_match:
             numbers.append(int(n_match.group(0)))
             idx = n_match.end()
+            last_token_end = idx
             continue
-            
+
+        # Если не нашли ни упоминания, ни числа — начался текст причины
         break
-        
-    reason = raw[idx:].strip() or "Начисление"
+
+    reason = raw[last_token_end:].strip() or "Начисление"
     
     if not mentions:
         return None, None, "Не найдено ни одного упоминания игрока."
 
+    if not numbers:
+        return None, None, "Не указана сумма начисления."
+
     pairs = []
-    if len(numbers) == 1 or (len(numbers) > 1 and len(mentions) != len(numbers)):
-        global_amt = numbers[0]
-        pairs = [(uid, global_amt) for uid in mentions]
-        
-        if len(numbers) > 1:
-            extra_nums = " ".join(str(n) for n in numbers[1:])
-            reason = f"{extra_nums} {reason}".strip()
-            
+    # Логика распределения сумм
+    if len(numbers) == 1:
+        # Одна сумма на всех
+        pairs = [(m, numbers[0]) for m in mentions]
     elif len(numbers) == len(mentions):
+        # Каждому своя сумма
         pairs = list(zip(mentions, numbers))
     else:
-        return None, None, "Не удалось определить сумму. Укажите сумму после каждого упоминания или одну общую сумму."
+        # Непонятно, как распределять (например, 2 суммы на 3 человек)
+        return None, None, "Не удалось сопоставить суммы игрокам. Укажите либо одну общую сумму, либо по сумме после каждого игрока."
 
-    for uid, amt in pairs:
-        if amt < config.MIN_TRANSACTION or amt > config.MAX_TRANSACTION:
-            return None, None, f"Сумма {amt} вне допустимого диапазона ({config.MIN_TRANSACTION}–{config.MAX_TRANSACTION})."
-
+    # Минимальная валидация (макс/мин проверим позже при начислении)
     return pairs, reason, None
+
+
+async def resolve_to_id(api, raw_mention: str) -> int:
+    """Превращает строку (ID или алиас) в цифровой VK ID."""
+    if not raw_mention: return None
+    
+    # Если это уже просто цифры
+    if raw_mention.isdigit():
+        return int(raw_mention)
+        
+    # Если это id123
+    if raw_mention.lower().startswith("id") and raw_mention[2:].isdigit():
+        return int(raw_mention[2:])
+        
+    # Иначе пробуем резолвить через API как алиас
+    try:
+        users = await api.users.get(user_ids=[raw_mention])
+        if users:
+            return users[0].id
+    except Exception:
+        pass
+    return None
 
 
 @bp.on.message(text=["/начислить <args>", "Начислить <args>"])
@@ -166,10 +204,20 @@ async def deposit_handler(message: Message, args: str, admin_data: dict):
         return
 
     results = []
-    for target_id, amount in pairs:
+    for raw_mention, amount in pairs:
+        # Валидация суммы тут
+        if amount < config.MIN_TRANSACTION or amount > config.MAX_TRANSACTION:
+            results.append(f"❌ Сумма {amount} вне диапазона ({config.MIN_TRANSACTION}–{config.MAX_TRANSACTION}).")
+            continue
+
+        target_id = await resolve_to_id(bp.api, raw_mention)
+        if not target_id:
+            results.append(f"⚠️ Не удалось распознать игрока: {raw_mention}")
+            continue
+
         target_user = await database.get_user(target_id)
         if not target_user:
-            results.append(f"⚠️ ID {target_id} — не найден в банке, пропущен.")
+            results.append(f"⚠️ {raw_mention} (ID {target_id}) — не найден в банке.")
             continue
         try:
             new_balance = await database.change_balance(target_id, message.from_id, amount, reason)
@@ -179,10 +227,10 @@ async def deposit_handler(message: Message, args: str, admin_data: dict):
             char = target_user.get("character_name", f"ID {target_id}")
             results.append(f"❌ {char}: {e}")
         except Exception as e:
-            results.append(f"❌ ID {target_id}: непредвиденная ошибка — {e}")
+            results.append(f"❌ ID {target_id}: ошибка — {e}")
 
     summary = "\n".join(results)
-    flavor_text = f"\n\n_{flavor.get_deposit_flavor()}_"
+    flavor_text = f"\n\n💰 «{flavor.get_deposit_flavor()}»"
     await message.answer(f"📋 Результаты начисления (причина: {reason}):\n\n{summary}{flavor_text}")
 
 # ─── /снять @user сумма причина (только для Банкира) ────────────────────────
@@ -193,9 +241,9 @@ async def deposit_handler(message: Message, args: str, admin_data: dict):
 ])
 @require_admin
 async def admin_withdraw_handler(message: Message, mention: str, amount: int, reason: str, admin_data: dict):
-    target_id = utils.extract_user_id(mention)
+    target_id = await resolve_to_id(bp.api, mention)
     if not target_id:
-        await message.answer("❌ Неверный формат упоминания пользователя.")
+        await message.answer("❌ Не удалось распознать пользователя.")
         return
 
     if amount < config.MIN_TRANSACTION or amount > config.MAX_TRANSACTION:
@@ -204,7 +252,7 @@ async def admin_withdraw_handler(message: Message, mention: str, amount: int, re
 
     target_user = await database.get_user(target_id)
     if not target_user:
-        await message.answer("❌ Пользователь не найден в банке.")
+        await message.answer(f"❌ Пользователь (ID {target_id}) не найден в банке.")
         return
 
     try:
@@ -214,7 +262,7 @@ async def admin_withdraw_handler(message: Message, mention: str, amount: int, re
             f"🔻 Снято {utils.format_balance(amount)} у персонажа {char}.\n"
             f"💰 Остаток: {utils.format_balance(new_balance)}\n"
             f"📝 Причина: {reason}\n\n"
-            f"_{flavor.get_withdraw_flavor()}_"
+            f"💸 «{flavor.get_withdraw_flavor()}»"
         )
     except ValueError as e:
         await message.answer(f"❌ Операция отклонена: {e}")
@@ -226,9 +274,9 @@ async def admin_withdraw_handler(message: Message, mention: str, amount: int, re
 @bp.on.message(text=["/история <mention>"])
 @require_admin
 async def admin_history_handler(message: Message, mention: str, admin_data: dict):
-    target_id = utils.extract_user_id(mention)
+    target_id = await resolve_to_id(bp.api, mention)
     if not target_id:
-        await message.answer("❌ Неверный формат упоминания пользователя.")
+        await message.answer("❌ Не удалось распознать пользователя.")
         return
 
     try:
@@ -255,9 +303,9 @@ async def admin_history_handler(message: Message, mention: str, admin_data: dict
 @bp.on.message(text=["/изменитьперса <mention> <new_name>", "Изменитьперса <mention> <new_name>"])
 @require_admin
 async def change_character_name(message: Message, mention: str, new_name: str, admin_data: dict):
-    target_id = utils.extract_user_id(mention)
+    target_id = await resolve_to_id(bp.api, mention)
     if not target_id:
-        await message.answer("❌ Неверный формат упоминания.")
+        await message.answer("❌ Не удалось распознать пользователя.")
         return
 
     new_name = new_name.strip()
@@ -279,9 +327,9 @@ async def change_character_name(message: Message, mention: str, new_name: str, a
                       "/сделатьадмином <mention>", "Сделатьадмином <mention>"])
 @require_admin
 async def set_admin_handler(message: Message, mention: str, admin_data: dict):
-    target_id = utils.extract_user_id(mention)
+    target_id = await resolve_to_id(bp.api, mention)
     if not target_id:
-        await message.answer("❌ Неверный формат упоминания.")
+        await message.answer("❌ Не удалось распознать пользователя.")
         return
 
     target_user = await database.get_user(target_id)
@@ -298,9 +346,9 @@ async def set_admin_handler(message: Message, mention: str, admin_data: dict):
                       "/снятьадмина <mention>", "Снятьадмина <mention>"])
 @require_admin
 async def remove_admin_handler(message: Message, mention: str, admin_data: dict):
-    target_id = utils.extract_user_id(mention)
+    target_id = await resolve_to_id(bp.api, mention)
     if not target_id:
-        await message.answer("❌ Неверный формат упоминания.")
+        await message.answer("❌ Не удалось распознать пользователя.")
         return
 
     if target_id == config.ADMIN_VK_ID:
@@ -320,9 +368,9 @@ async def remove_admin_handler(message: Message, mention: str, admin_data: dict)
 @bp.on.message(text=["/удалить <mention>", "Удалить <mention>"])
 @require_admin
 async def delete_user_handler(message: Message, mention: str, admin_data: dict):
-    target_id = utils.extract_user_id(mention)
+    target_id = await resolve_to_id(bp.api, mention)
     if not target_id:
-        await message.answer("❌ Неверный формат упоминания.")
+        await message.answer("❌ Не удалось распознать пользователя.")
         return
 
     if target_id == config.ADMIN_VK_ID:
