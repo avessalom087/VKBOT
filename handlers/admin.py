@@ -162,17 +162,25 @@ async def resolve_to_id(api, raw_mention: str) -> int:
     """Превращает строку (ID или алиас) в цифровой VK ID."""
     if not raw_mention: return None
     
+    # Формат [id123456|Имя] — стандартный ВК-формат упоминания
+    bracket_match = re.match(r"\[(?:id|club|public)(\d+)\|[^\]]*\]", raw_mention, re.IGNORECASE)
+    if bracket_match:
+        return int(bracket_match.group(1))
+
     # Если это уже просто цифры
     if raw_mention.isdigit():
         return int(raw_mention)
-        
+
     # Если это id123
     if raw_mention.lower().startswith("id") and raw_mention[2:].isdigit():
         return int(raw_mention[2:])
-        
-    # Иначе пробуем резолвить через API как алиас
+
+    # Убираем символ @ если есть, и пробуем резолвить через API как алиас
+    clean = raw_mention.lstrip("@").strip()
+    if not clean:
+        return None
     try:
-        users = await api.users.get(user_ids=[raw_mention])
+        users = await api.users.get(user_ids=[clean])
         if users:
             return users[0].id
     except Exception:

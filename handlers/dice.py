@@ -79,18 +79,6 @@ async def roll_handler(message: Message, args: str = None):
     # Roll logic
     rolls = [random.randint(1, dice_type) for _ in range(count)]
     total = sum(rolls) + modifier
-    
-    crit_msg = ""
-    if count == 1:
-        roll_result = rolls[0]
-        rolls_display = str(roll_result)
-        if roll_result == 1:
-            crit_msg = "\n💀 КРИТИЧЕСКИЙ ПРОВАЛ! 💀"
-        elif roll_result == dice_type:
-            crit_msg = "\n✨ КРИТИЧЕСКИЙ УСПЕХ! ✨"
-    else:
-        # Crits disabled for multiple dice
-        rolls_display = f"[{', '.join(map(str, rolls))}] = {sum(rolls)}"
         
     # Пытаемся получить имя пользователя или его кастомный никнейм для красивого упоминания
     try:

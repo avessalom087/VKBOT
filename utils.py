@@ -5,14 +5,6 @@ from datetime import datetime, timezone, timedelta
 def format_balance(amount: int) -> str:
     return f"{amount:,} ft".replace(",", " ")
 
-def extract_user_id(text: str) -> int:
-    match = re.search(r"\[id(\d+)\|.*?\]|(?:@|\*|vk\.com/)?id(\d+)", text, re.IGNORECASE)
-    if match:
-        return int(match.group(1) or match.group(2))
-    if text.strip().isdigit():
-        return int(text.strip())
-    return None
-
 def get_currency_form(amount: int) -> str:
     n = abs(amount) % 100
     n1 = n % 10
