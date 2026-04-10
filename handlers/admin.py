@@ -125,6 +125,14 @@ def parse_multi_deposit(raw: str):
             idx = sep_match.end()
             if idx >= len(raw): break
 
+        # Пробуем найти число (СНАЧАЛА ЧИСЛА, чтобы сумма не считалась алиасом)
+        n_match = number_re.match(raw, idx)
+        if n_match:
+            numbers.append(int(n_match.group(0)))
+            idx = n_match.end()
+            last_token_end = idx
+            continue
+
         # Пробуем найти упоминание
         m_match = mention_re.match(raw, idx)
         if m_match:
@@ -135,15 +143,7 @@ def parse_multi_deposit(raw: str):
             last_token_end = idx
             continue
 
-        # Пробуем найти число
-        n_match = number_re.match(raw, idx)
-        if n_match:
-            numbers.append(int(n_match.group(0)))
-            idx = n_match.end()
-            last_token_end = idx
-            continue
-
-        # Если не нашли ни упоминания, ни числа — начался текст причины
+        # Если не нашли ни числа, ни упоминания — начался текст причины
         break
 
     reason = raw[last_token_end:].strip() or "Начисление"
